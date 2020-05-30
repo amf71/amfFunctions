@@ -190,7 +190,7 @@ remove.clones.on.tree <- function(tree, clones.to.remove = NA, clones.to.keep = 
   clones.to.keep <- clones.to.keep[clones.to.keep %in% all.clones]
   
   # if nothing to remove that is ctually ono the tree then just return the tree with a warning #
-  if(length(clones.to.remove)==0){
+  if( length(clones.to.remove) == 0 ){
     warning( "no clones specified to remove that are on the tree\n")
     return(tree)
   }
@@ -242,7 +242,8 @@ make.CCFs.tree.consistant <- function( tree.mat, CCF.data, warning.limit = 1 , p
   tree.mat <- logically.order.tree( tree.mat )
   
   # limit to clones in CCF table #
-  tree.mat <- remove.clones.on.tree( tree.mat, clones.to.keep = CCF.data$clones )
+  tree.clones <- unique( as.numeric(tree.mat) )
+  if( !all( tree.clones %in% CCF.data$clones) ) tree.mat <- remove.clones.on.tree( tree.mat, clones.to.keep = CCF.data$clones )
   
   # get root #
   root <- tree.mat[ 1, 1 ]
