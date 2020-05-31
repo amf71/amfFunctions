@@ -276,7 +276,7 @@ make.CCFs.tree.consistant <- function( tree.mat, CCF.data, warning.limit = 1 , p
     if( parent.adjust * parent.CCF < daughter.total.CCF ){
       if( daughter.total.CCF / parent.CCF > warning.limit ){
         if( decrease.daughters  )  type <- "Decreasing daughter CCFs proportionally" else type <- "Increasing parent CCF"
-        cat( paste0("        ", "clone ", parent, " has daughters with ", signif( (daughter.total.CCF * clonal_CCF) / parent.CCF, 3 ), "% CCF of itself. ", type, "\n") )
+        cat( paste0("        ", "clone ", parent, "'s daughters have total CCF which is ", signif( (daughter.total.CCF * clonal_CCF) / parent.CCF, 3 ), "% its own CCF. ", type, "  so total CCF of daughters = parent\n") )
       }
       if( increase.parents  ) CCF.data[ parentrow, "CCF" ] <- daughter.total.CCF * parent.adjust
       if( decrease.daughters  ) CCF.data[ daughterrows, "CCF" ] <- sapply(daughterrows, function(rowi) (CCF.data[ rowi, "CCF" ] / daughter.total.CCF) * parent.CCF )
@@ -285,7 +285,8 @@ make.CCFs.tree.consistant <- function( tree.mat, CCF.data, warning.limit = 1 , p
   
   # normalise to root #
   # if the clonal cluster CCF needed to be increased then adjust this back down too 1 and adjust all other clones by similar margin #
-  if( any( CCF.data$CCF > clonal_CCF ) ) cat( paste0("        Clonal CCF needed increasing to accommodate daughters. Therefore decreasing all CCFs proportionally so clonal CCF == 1 again\n") )
+  clonalCCF.change <- CCF.data$CCF[1] / clonal_CCF
+  if( clonalCCF.change > 1 ) cat( paste0("        Clonal CCF needed increasing by ", clonalCCF.change * 100, "% to accommodate daughters. Therefore decreasing all CCFs proportionally so clonal CCF == 1 again\n") )
   
   # ensure clonal cluster = 1 #
   CCF.data$CCF <- ( (CCF.data$CCF * clonal_CCF) / CCF.data[ CCF.data$clones == root, "CCF"] ) 
