@@ -134,7 +134,14 @@ logically.order.tree <- function(tree){
   # work out the root (the only clone tht's never a daughter ) #
   root <- tree[,1] [! tree[,1] %in% tree[,2] ]
   
-  # make empty list for levels of ecah clone #
+  # check that there is one 'root' this means there is no true root output error #
+  if( length(root) > 1 ) stop( "Tree is not rooted. Please provide one clone from which all others arise.")
+  
+  # check that no clone has two parents (impossible) #
+  dups.i <- duplicated( tree[,2] )
+  if( any( dups.i ) ) stop( paste0( "Clone(s)", tree[ dups.i, 2 ], "have multiple parents in tree. Not possible." ) )
+  
+  # make empty list for levels of each clone #
   levels <- rep(NA,nrow(tree))
   
   # aasign the root to level 1 #
@@ -143,7 +150,7 @@ logically.order.tree <- function(tree){
   # list aall the daughter's of root to work out the level #
   daughters <- tree[ tree[,1] %in% root,2]
   
-  # go down the tree in levels and asssign clenns correct levels #
+  # go down the tree in levels and asssign clones correct levels #
   l <- 1
   repeat{
     l <- l + 1
@@ -153,7 +160,9 @@ logically.order.tree <- function(tree){
     if(all(!is.na(levels))) break
   }
   tree <- tree[order(levels),]
+  
   return(tree)
+  
 }
 
 
