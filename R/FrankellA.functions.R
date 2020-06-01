@@ -132,7 +132,7 @@ logically.order.tree <- function(tree){
   ### assign levels to each parent clone depending on how near the trunk ###
   
   # work out the root (the only clone tht's never a daughter ) #
-  root <- tree[,1] [! tree[,1] %in% tree[,2] ]
+  root <- unique( tree[,1] [! tree[,1] %in% tree[,2] ] )
   
   # check that there is one 'root' this means there is no true root output error #
   if( length(root) > 1 ) stop( "Tree is not rooted. Please provide one clone from which all others arise.")
