@@ -3,6 +3,8 @@
 export(Overlay.tree.parents)
 export(add.cummulative.start.end)
 export(cal.Subject.accross.regions)
+export(calc.ploidy)
+export(calc.wgii)
 export(correct.specific.ps)
 export(extract.tree.mutTable)
 export(extract_ccf_table)

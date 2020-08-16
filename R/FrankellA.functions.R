@@ -127,10 +127,10 @@ mceiling <- function( x, base ) base * ceiling( x / base )
 logically.order.tree <- function(tree){
   
   # if only 1 clone on tree then just output it as it is #
-  if(all(tree==unique(tree)[1])) return(tree)
+  if( all( tree == unique(tree)[1] ) ) return(tree)
   
   ### assign levels to each parent clone depending on how near the trunk ###
-  
+
   # work out the root (the only clone tht's never a daughter ) #
   root <- unique( tree[,1] [! tree[,1] %in% tree[,2] ] )
   
@@ -160,6 +160,8 @@ logically.order.tree <- function(tree){
     if(all(!is.na(levels))) break
   }
   tree <- tree[order(levels),]
+  
+  if(class(tree)=="character" | class(tree)=="numeric") tree <- matrix(tree, ncol = 2, byrow = TRUE)
   
   return(tree)
   
@@ -605,7 +607,7 @@ extract_ccf_table <- function( muttable_df, ccf_col = "PhyloCCF_MPhase", samplei
   ## malnipulate as data/table bt return to original class (tibble, data.frame) at the end ##
   
   orig_class <- class(muttable_df)
-  muttable_df <- as.data.table(muttable_df)
+  muttable_df <- data.table::as.data.table(muttable_df)
   
   ## which samples in the table have data in CCf column ##
   
@@ -620,8 +622,8 @@ extract_ccf_table <- function( muttable_df, ccf_col = "PhyloCCF_MPhase", samplei
     CCFs <- muttable_dfsamp[ !is.na( get(cluster_col) ), .(get(cluster_col), get(ccf_col)) ]
     setnames(CCFs, c("cluster", "CCFs")) 
     
-    ccf_by_region <- as.data.table( do.call(rbind, lapply( strsplit(CCFs[, CCFs],split=";"), function(x) sapply(strsplit(x,split = ":"), function (x) x[2]))) )
-    setnames(ccf_by_region, sapply(strsplit( strsplit(CCFs[, CCFs],split=";")[[1]],split = ":"), function (x) x[1]) )
+    ccf_by_region <- data.table::as.data.table( do.call(rbind, lapply( strsplit(CCFs[, CCFs],split=";"), function(x) sapply(strsplit(x,split = ":"), function (x) x[2]))) )
+    data.table::setnames(ccf_by_region, sapply(strsplit( strsplit(CCFs[, CCFs],split=";")[[1]],split = ":"), function (x) x[1]) )
     
     ccf_by_region <- apply( ccf_by_region, 2, as.numeric)
     
@@ -660,6 +662,129 @@ extract_ccf_table <- function( muttable_df, ccf_col = "PhyloCCF_MPhase", samplei
   
   return(out)
   
+}
+
+
+###################################################
+### Function to caulcated wgII from seg CN data ###
+###################################################
+
+## code written by Nicolai ##
+## Input is an ASCAT output matrix, with nA in column 7, nB in column 8 #
+
+#' Function to caulcated wgII from seg CN data
+#'
+#'
+#'
+#'
+#' @export
+calc.wgii <- function(seg, threshold = 0.6, check.names=FALSE, include.sexchrom=FALSE){
+  # Edit 20140826: gii & wgii: exclude sex chromosomes
+  # Edit 20150316: Use wMajor as ploidy
+  seg[,1] <- as.character(seg[,1])
+  if(check.names){
+    seg <- check.names.fn(seg)
+  }
+  output.mat <- matrix(NA, nrow=length(unique(seg[,1])), ncol=4)
+  colnames(output.mat) <- c('GII', 'wGII', 'FLOH', 'wFLOH')
+  rownames(output.mat) <- unique(seg[,1])
+  chrom.length <- setNames(rep(NA, length(unique(seg[,2]))), unique(seg[,2]))
+  if(! all(seg[,8] <= seg[,7]) ){
+    cat("Warning!! nB  not always <= nA!!  -- Correcting for internal use (only!)\n") # In case ASCAT people change the algorithm
+    tmp <- seg
+    seg[tmp[,8] > tmp[,7],7]  <- tmp[tmp[,8] > tmp[,7],8]
+    seg[tmp[,8] > tmp[,7],8]  <- tmp[tmp[,8] > tmp[,7],7]
+  }
+  cat("Setting sample ploidy according to major proportion copy number. Ploidy < 2 re-set at 2\n")
+  
+  message( "Calculating pliody for each sample..\n" )
+  
+  ploidy <- calc.ploidy(seg, check.names=check.names)
+  ploidy <- setNames(ploidy[,2], rownames(ploidy))
+  ploidy[ploidy < 2] <- 2
+  for(i in names(chrom.length)){chrom.length[i] <- max(seg[seg[,2] %in% i,4]) - min(seg[seg[,2] %in% i,3])} # restrict to the part that can be measured
+  chrom.length <- setNames(as.numeric(chrom.length), names(chrom.length))
+  
+  message( "Calculating metrics for each sample..\n" )
+  
+  pb <- txtProgressBar(1, length(unique(seg[,1])), style=3, width = 30)
+  
+  for(i in unique(seg[,1])){
+    sample.seg <- seg[seg[,1] %in% i,] # Restrict to sample
+    sample.seg.cn <- sample.seg[sample.seg[,6] < (ploidy[i] - threshold) | sample.seg[,6] > (ploidy[i] + threshold),] # Restrict to aberrant segments
+    sample.seg.loh <- sample.seg[sample.seg[,8] == 0 & sample.seg[,7] != 0,] # Restrict to LOH segments
+    output.mat[i,1] <- sum(as.numeric(sample.seg.cn[,4]) - as.numeric(sample.seg.cn[,3]))/sum(chrom.length) # GII
+    output.mat[i,3] <- sum(as.numeric(sample.seg.loh[,4] - sample.seg.loh[,3]))/sum(chrom.length) # FLOH
+    wgii <- vector()
+    wfloh <- vector()
+    if(!include.sexchrom){
+      chrom.length <- chrom.length[!names(chrom.length) %in% c('X','Y','x','y',23,24)]
+    }
+    for(j in names(chrom.length)){
+      sample.seg.chr <- sample.seg.cn[sample.seg.cn[,2] %in% j,]
+      sample.seg.chr.loh <- sample.seg.loh[sample.seg.loh[,2] %in% j,]
+      wgii <- c(wgii, sum(sample.seg.chr[,4] - sample.seg.chr[,3])/chrom.length[j])
+      wfloh <- c(wfloh, sum(sample.seg.chr.loh[,4] - sample.seg.chr.loh[,3])/chrom.length[j])
+    }
+    output.mat[i,2] <- sum(wgii)/length(chrom.length)
+    output.mat[i,4] <- sum(wfloh)/length(chrom.length)
+    
+    setTxtProgressBar(pb, which( unique(seg[,1]) == i ))
+    
+  }
+  return(output.mat)
+}
+
+
+#' Function to calculate ploidy distribution and main ploidy per sample from seg input (Nicolai)
+#'
+#'
+#'
+#'
+#' @export
+calc.ploidy <- function(seg, cnCol=6,check.names=FALSE){
+  #20140311 : added wMajor, weighted ploidy by chromosome
+  #20151209 : Added the option to call mean raw copy if it exists
+  #seg = ASCAT segmented output (or any segmented output), with total CN in column 6
+  seg[,1] <- as.character(seg[,1])
+  if(check.names){
+    seg <- check.names.fn(seg)
+  }
+  samples <- unique(seg[,1])
+  out.ploidy <- matrix(nrow=length(samples), ncol=14)
+  rownames(out.ploidy) <- samples
+  colnames(out.ploidy) <- c('Major','wMajor','MeanRaw',0:10) #wMajor is weighted by chromosome, MeanRaw is mean of the raw CN values from ASCAT 2.3
+  
+  pb <- txtProgressBar(1, length(samples), style=3, width = 30)
+  
+  for(j in samples){
+    sample.seg <- seg[seg[,1] %in% j,]
+    ploidy <- vector()
+    for(k in unique(sample.seg[,cnCol])){
+      tmp <- sample.seg[sample.seg[,cnCol] %in% k,]
+      ploidy <- c(ploidy, setNames(sum(tmp[,4]-tmp[,3]), k))
+    }
+    ploidy <- (ploidy/sum(ploidy))[order(ploidy/sum(ploidy),decreasing=T)]
+    out.ploidy[j,1] <- as.numeric(names(ploidy)[1])
+    out.ploidy[j,3:13] <- ploidy[colnames(out.ploidy)[3:13]]
+    wMajor <- c()
+    for(k in unique(sample.seg[,2])){
+      tmp <- sample.seg[sample.seg[,2] %in% k,]
+      tmp <- setNames(tmp[,4]-tmp[,3], tmp[,cnCol])
+      wMajor <- c(wMajor,setNames(as.numeric(names(sort(tapply(tmp, names(tmp),sum), decreasing=T)[1])), k))
+    }
+    out.ploidy[j,2] <- as.numeric(names(sort(table(wMajor), decreasing=T)[1]))
+    if(any(grepl('nAraw', colnames(seg)))){
+      a <- rowSums(sample.seg[,c('nAraw','nBraw')])
+      b <- sample.seg[,4]-sample.seg[,3]
+      out.ploidy[j,'MeanRaw'] <- sum(a * b/sum(b))
+    }
+    setTxtProgressBar(pb, which( samples == j ))
+  }
+  if(!any(grepl('nAraw', colnames(seg)))){
+    out.ploidy <- out.ploidy[,-c(3)]
+  }
+  out.ploidy
 }
 
 
