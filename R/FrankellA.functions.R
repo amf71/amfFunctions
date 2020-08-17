@@ -248,9 +248,10 @@ make.CCFs.tree.consistant <- function( tree.mat, CCF.data, warning.limit = 1 , p
   
   # one of decrease daughters or parents must be true
   if( all( !decrease.daughters & !increase.parents ) ) cat( "Please set either decrease.daughters or decrease.parents arguments to TRUE or cannot correct tree\n" )
+  if( increase.parents == TRUE ) decrease.daughters <- FALSE
   
   # order tree trunk -> leaf #
-  tree.mat <- logically.order.tree( tree.mat )
+  tree.mat <- amfFunctions::logically.order.tree( tree.mat )
   
   # limit to clones in CCF table #
   tree.clones <- unique( as.numeric(tree.mat) )
@@ -260,7 +261,8 @@ make.CCFs.tree.consistant <- function( tree.mat, CCF.data, warning.limit = 1 , p
   root <- tree.mat[ 1, 1 ]
   
   # get ordered list of parents #
-  parent.order <- rev(unique(tree.mat[,1]))
+  parent.order <- unique(tree.mat[,1])
+  if( decrease.daughters == FALSE ) parent.order <- rev( parent.order )
   
   # detect if fractions or percentages #
   is_frac <- CCF.data[ CCF.data$clones ==  root, "CCF" ] < 2
