@@ -2,10 +2,10 @@
 % Please edit documentation in R/FrankellA.functions.R
 \name{calc.ploidy}
 \alias{calc.ploidy}
-\title{#Function to calculate ploidy distribution and main ploidy per sample from seg input}
+\title{Function to calculate ploidy distribution and main ploidy per sample from seg input (Nicolai)}
 \usage{
 calc.ploidy(seg, cnCol = 6, check.names = FALSE)
 }
 \description{
-#Function to calculate ploidy distribution and main ploidy per sample from seg input
+Function to calculate ploidy distribution and main ploidy per sample from seg input (Nicolai)
 }
