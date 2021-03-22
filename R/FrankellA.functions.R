@@ -671,6 +671,39 @@ interpret_following_Args <- function(args, arg.table){
   
 }
 
+#' Function to extract the tree information from all patients in a tree output directory
+#'
+#'
+#'
+#'
+#' @export
+read_trees <- function( tree_path, return_all = FALSE, remove_missing = TRUE ){
+  
+  tumours <- system( paste('ls', tree_path ), intern = TRUE )
+  tumours <- tumours[ grepl('LTX', tumours) ]
+  
+  tree_data <- lapply(tumours, function(tumour){
+
+    tree_path <- paste0(tree_path, '/', tumour, '/', tumour, '.tree.RDS' )
+    
+    if( file.exists(tree_path) ){
+    tree <- readRDS( tree_path ) 
+    } else return( NULL )
+    
+  })
+  names(tree_data) <- tumours
+ 
+  if( remove_missing ) tree_data <- tree_data[ !sapply( tree_data, function(tree) all(is_null( tree )) ) ]
+  
+  if( return_all ) return( tree_data )
+   
+  tree_data <- lapply(tree_data, function(tree) tree$graph_pyclone$Corrected_tree )
+  
+  return(tree_data)
+  
+}
+
+
 #=====#
 # END #
 #=====#
