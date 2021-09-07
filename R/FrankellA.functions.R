@@ -597,7 +597,78 @@ calc.ploidy <- function(seg, cnCol=6,check.names=FALSE){
   out.ploidy
 }
 
-
+calc.perc.subclonal <- function(seg, threshold = 0.6, check.names=FALSE, include.sexchrom=FALSE, bootstrap = FALSE, tumour_id_col = 164){
+  seg[,1] <- as.character(seg[,1])
+  if(check.names){
+    seg <- check.names.fn(seg)
+  }
+  output.mat <- matrix(NA, nrow=length(unique(seg[,1])), ncol=4)
+  colnames(output.mat) <- c('GII', 'wGII', 'FLOH', 'wFLOH')
+  rownames(output.mat) <- unique(seg[,1])
+  chrom.length <- setNames(rep(NA, length(unique(seg[,2]))), unique(seg[,2]))
+  if(! all(seg[,8] <= seg[,7]) ){
+    cat("Warning!! nB  not always <= nA!!  -- Correcting for internal use (only!)\n") # In case ASCAT people change the algorithm
+    tmp <- seg
+    seg[tmp[,8] > tmp[,7],7]  <- tmp[tmp[,8] > tmp[,7],8]
+    seg[tmp[,8] > tmp[,7],8]  <- tmp[tmp[,8] > tmp[,7],7]
+  }
+  cat("Setting sample ploidy according to major proportion copy number. Ploidy < 2 re-set at 2\n")
+  
+  message( "Calculating pliody for each sample..\n" )
+  
+  ploidy <- calc.ploidy(seg, check.names=check.names)
+  ploidy <- setNames(ploidy[,2], rownames(ploidy))
+  ploidy[ploidy < 2] <- 2
+  for(i in names(chrom.length)){chrom.length[i] <- max(seg[seg[,2] %in% i,4]) - min(seg[seg[,2] %in% i,3])} # restrict to the part that can be measured
+  chrom.length <- setNames(as.numeric(chrom.length), names(chrom.length))
+  
+  message( "Calculating metrics for each sample..\n" )
+  
+  pb <- txtProgressBar(1, length(unique(seg[,1])), style=3, width = 30)
+  
+  # Define gains / losses in each sample
+  seg$gain <- FALSE
+  seg$loss <- FALSE
+  seg$loh  <- FALSE
+  seg$width <- seg[,3] - seg[,4]
+  for(i in unique(seg[,1])){
+    seg[ seg[,1] == i, 'gain'] <- seg[seg[,1] == i,6] > (ploidy[i] + threshold)
+    seg[ seg[,1] == i, 'loss'] <- seg[seg[,1] == i,6] < (ploidy[i] - threshold)
+    seg[ seg[,1] == i, 'loh']  <- seg[seg[,1] == i,8] == 0 & seg[seg[,1] == i,7] != 0
+    seg$abberant <- seg$gain | seg$loss | seg$loh
+    setTxtProgressBar(pb, which( unique(seg[,1]) == i ))
+  }
+  
+  calc_cin_ith <- function(input, bootstrap = FALSE){
+    
+    seg_tumour <- copy(input)
+    samples <- unique(seg_tumour$sample)
+    
+    calc_cin_ith_sub <- function( seg, samples = NA ){
+      if( !all(is.na(samples) ) ) seg <- seg[ sample %in% samples ]
+      seg[, is_hetergenous_gain := length(unique(gain)) > 1, by = .(startpos, endpos)]
+      seg[, is_hetergenous_loss := length(unique(loss)) > 1, by = .(startpos, endpos)]
+      seg[, is_hetergenous_loh  := length(unique(loss)) > 1, by = .(startpos, endpos)]
+      seg[, is_hetergenous  := any(is_hetergenous_gain, is_hetergenous_loss ), by = .(startpos, endpos)]  # don't use loh for now
+      seg[, sum(is_hetergenous) / .N ]
+    }
+    
+    if( !bootstrap ){
+      return( calc_cin_ith_sub( seg_tumour ) )
+    } else {
+      pairs <- combn(samples, 2)
+      pairs <- lapply(1:ncol(pairs), function(col) pairs[, col] )
+      return(  mean( sapply(1:length(pairs), function(pairi) calc_cin_ith_sub( seg_tumour, samples = pairs[[pairi]] )  ) ) )
+    }
+  }
+  
+  seg <- as.data.table(seg)
+  
+  out <- seg[, .(CIN_frac_het = calc_cin_ith( .SD ),
+                 CIN_frac_het_bootstrapped = calc_cin_ith( .SD, bootstrap = TRUE ) ), by = tumour_id]
+  
+  return(out)
+}
 
 
 #===================================#
@@ -694,11 +765,12 @@ read_trees <- function( tree_path, return_all = FALSE, remove_missing = TRUE ){
   })
   names(tree_data) <- tumours
  
-  if( remove_missing ) tree_data <- tree_data[ !sapply( tree_data, function(tree) all(is_null( tree )) ) ]
+  if( remove_missing ) tree_data <- tree_data[ which(!sapply( tree_data, function(tree) all(is_null( tree )) )) ]
   
   if( return_all ) return( tree_data )
    
   tree_data <- lapply(tree_data, function(tree) tree$graph_pyclone$Corrected_tree )
+  names(tree_data) <- tumours
   
   return(tree_data)
   
